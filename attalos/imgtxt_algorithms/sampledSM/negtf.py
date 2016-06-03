@@ -39,3 +39,4 @@ with tf.InteractiveSession() as sess:
     Wc = tf.truncated_normal( [V, d] )
 
   cost_relax = tf.reduce_sum( tf.pow( tf.sub(sr_relax[i], y), 2 ) )
+
