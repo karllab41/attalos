@@ -45,9 +45,9 @@ elif weightfile:
     Wh = theano.shared(np.load(weightfile)['Wh'])
     Wc = theano.shared(np.load(weightfile)['Wc'])
 else:
-    Wh = theano.shared(np.random.ranf((hidden, f)))
-    Wi = theano.shared(np.random.ranf((d, hidden)))
-    Wc = theano.shared(np.random.ranf((V, d)))
+    Wh = theano.shared(np.random.ranf((hidden, f))-0.5)
+    Wi = theano.shared(np.random.ranf((d, hidden))-0.5)
+    Wc = theano.shared(np.random.ranf((V, d))-0.5)
     
     print Wh.get_value().shape
     print Wi.get_value().shape
@@ -66,7 +66,8 @@ n = T.matrix()
 if numlayers==1:
     xcorr = Wc.dot(Wi.dot(x.T)).T
 else:
-    xcorr = Wc.dot(Wi.dot(T.nnet.sigmoid(Wh.dot(x.T)))).T
+    # xcorr = Wc.dot(Wi.dot(T.nnet.sigmoid(Wh.dot(x.T)))).T
+    xcorr = Wc.dot(Wi.dot(T.nnet.relu(Wh.dot(x.T)))).T
 
 # LOSS FUNCTION
 # Because p and n are {-1,0,1}, these two are the same
@@ -157,7 +158,7 @@ numlayers=2
 if numlayers==1:
     npxcorr = W2.dot(W1.dot(xD.T))
 else:
-    npxcorr = W2.dot(W1.dot(sigmoid(W0.dot(xD.T))))
+    npxcorr = W2.dot(W1.dot(relu(W0.dot(xD.T))))
 
 print 'Shapes, p:'+str(npp.shape)+', n:'+str(npn.shape)+', xcorr:'+str(npxcorr.shape)
 
