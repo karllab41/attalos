@@ -56,3 +56,12 @@ class ReadW2V():
 
         return self.vectors
 
+    def vec2mat(self):
+
+        return np.array(self.vectors.values())
+
+    def words(self):
+
+        return self.vectors.keys()
+
+
