@@ -1,7 +1,7 @@
 
-import theano.tensor as T
-import theano
-import tensorflow as tf
+# import theano.tensor as T
+# import theano
+# import tensorflow as tf
 import numpy as np
 from collections import OrderedDict
 import matplotlib.pylab as plt
@@ -44,7 +44,7 @@ class LinearRegression():
         return Y.T.dot(X).dot( self.invertcov(X) )
 
     # Given a matrix from "buildMat", build a predictor
-    def predict( self, X, Wmatrix ):
+    def predict( self, X ):
         Xn = self.normfeats( X )
         return self.W.dot( Xn.T.astype(np.float32) ).T
 
