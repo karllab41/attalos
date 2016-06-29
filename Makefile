@@ -5,10 +5,20 @@ build: depends
 	docker build -t l41-tensorflow -f Dockerfile.tf .
 	docker build -t l41-caffe -f Dockerfile.caffe .
 	docker build -t l41-domino-tensorflow -f Dockerfile.domino .
+	docker build -t l41-torch -f Dockerfile.torch .
+
 
 attalos-bash: depends
 	docker run --device /dev/nvidiactl:/dev/nvidiactl --device /dev/nvidia-uvm:/dev/nvidia-uvm \
         	   --device /dev/nvidia0:/dev/nvidia0  -it l41-tensorflow /bin/bash
+
+attalos-torch: depends
+	docker run --device /dev/nvidiactl:/dev/nvidiactl --device /dev/nvidia-uvm:/dev/nvidia-uvm \
+                   --device /dev/nvidia0:/dev/nvidia0  -it l41-torch /bin/bash
+
+attalos-theano: depends
+	docker run --device /dev/nvidiactl:/dev/nvidiactl --device /dev/nvidia-uvm:/dev/nvidia-uvm \
+                   --device /dev/nvidia2:/dev/nvidia0  -it l41-keras /bin/bash
 
 notebook: depends
 	# docker build -t l41-attalos-notebook -f Dockerfile.notebook .
