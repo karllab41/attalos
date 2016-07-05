@@ -427,6 +427,7 @@ void ChangeVout() {
     printf("WARNING: %s is not found. No changes to vectors are made.\n", update_vout_file);
     return;
   }
+
   fscanf(f, "%lld", &words);
   fscanf(f, "%lld", &word);
   if(word!=layer1_size) {
@@ -447,14 +448,20 @@ void ChangeVout() {
 	else for (a = 0; a < layer1_size; a++) fread(&dropvalue, sizeof(float), 1, f);
 	continue;
     }}
-    printf("Word \"%s\" updated \n", vocab[word].word);
+    // printf("Word \"%s\" updated \n", vocab[word].word);
     if(txtfile) 
       for (a = 0; a < layer1_size; a++) fscanf(f, " %f", &syn1neg[a + word*layer1_size]); 
     else
       for (a = 0; a < layer1_size; a++) fread(&syn1neg[a + word * layer1_size], sizeof(float), 1, f);
 
-    if (fix_vout_vectors)
+    // If desired, fix this vector so that it will not be able to change during vector updates
+    if (fix_vout_vectors) {
+      if (!(read_fix_vocab_file[0])) {
+        for (a = 0; a < vocab_hash_size; a++) fix_vocab_hash[a] = -1;
+        fix_vocab_size = 0;
+      }
       AddWordToFixVocab(text);
+    }
   }
 
   if (fix_vout_vectors) printf("Updated vectors from %s, and %lld will remain fixed\n", update_vout_file, fix_vocab_size);
@@ -859,9 +866,13 @@ int main(int argc, char **argv) {
     printf("\t\tThe vocabulary will be saved to <file>\n");
     printf("\t-read-vocab <file>\n");
     printf("\t\tThe vocabulary will be read from <file>, not constructed from the training data\n");
+    printf("\t-fix-vout-vectors <int>\n");
+    printf("\t\tTied with the below argument. If you'd like to fix certain word vectors, specify this option to be 1 . Default is 1 (on) <int>\n");
+    printf("\t-update-word-vectors <file>\n");
+    printf("\t\tWord vectors that we wish to upload, and if desired (with fix-vout-vectors) fix. Words and vectors in <file>\n");
     printf("\t-read-fix-vocab <file>\n");
     printf("\t\tThe dictionary for the image labels to be read from <file>\n");
-    printf("\t--read-vecs <file>\n");
+    printf("\t-read-vecs <file>\n");
     printf("\t\tThe vectors used for v_in and v_out. Files <file>.vin.bin and <file>.vout.bin MUST exist and in binary format\n");
     printf("\t-cbow <int>\n");
     printf("\t\tUse the continuous bag of words model; default is 1 (use 0 for skip-gram model)\n");
@@ -899,9 +910,6 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-min-count", argc, argv)) > 0) min_count = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-read-vecs", argc, argv)) > 0) { printf("Reading from vin and vout files\n"); strcpy(vector_files, argv[i + 1]); }
-
-  printf("Fixed vocabulary file: (%s)\n", read_fix_vocab_file);
-  printf("Output file: %s\n", output_file);
 
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
   fix_vocab = (struct vocab_word *) calloc(fix_vocab_max_size, sizeof(struct vocab_word));
