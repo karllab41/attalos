@@ -37,17 +37,19 @@ struct vocab_word {
 };
 
 char train_file[MAX_STRING], output_file[MAX_STRING];
-char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING], read_imvocab_file[MAX_STRING], vin_file[MAX_STRING], vector_files[MAX_STRING];
+char save_vocab_file[MAX_STRING], read_vocab_file[MAX_STRING], read_fix_vocab_file[MAX_STRING];
+char vector_files[MAX_STRING], update_vout_file[MAX_STRING], update_vin_file[MAX_STRING];
+int fix_vout_vectors=1;
 struct vocab_word *vocab;
 // Image vocabulary
-struct vocab_word *imvocab;
+struct vocab_word *fix_vocab;
 int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
 int *vocab_hash;
 // Image vocabulary hash
-int *imvocab_hash;
+int *fix_vocab_hash;
 long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
 // Image vocabulary size variables
-long long imvocab_max_size = 1000, imvocab_size = 0;
+long long fix_vocab_max_size = 1000, fix_vocab_size = 0;
 long long train_words = 0, word_count_actual = 0, iter = 5, file_size = 0, classes = 0;
 real alpha = 0.025, starting_alpha, sample = 1e-3;
 real *syn0, *syn1, *syn1neg, *expTable;
@@ -296,7 +298,7 @@ void LearnVocabFromTrainFile() {
   }
   SortVocab();
   if (debug_mode > 0) {
-    printf("Vocab size: %lld\n", vocab_size);
+    printf("Vocab from training from file: %lld\n", vocab_size);
     printf("Words in train file: %lld\n", train_words);
   }
   file_size = ftell(fin);
@@ -311,57 +313,64 @@ void SaveVocab() {
 }
 
 // Returns position of a word in the vocabulary; if the word is not found, returns -1
-int SearchImVocab(char *word) {
+int SearchFixVocab(char *word) {
   unsigned int hash = GetWordHash(word);
   while (1) {
-    if (imvocab_hash[hash] == -1) return -1;
-    if (!strcmp(word, imvocab[imvocab_hash[hash]].word)) return imvocab_hash[hash]; 
+    if (fix_vocab_hash[hash] == -1) return -1;
+    if (!strcmp(word, fix_vocab[fix_vocab_hash[hash]].word)) return fix_vocab_hash[hash]; 
     hash = (hash + 1) % vocab_hash_size;
   }
   return -1;
 }
 
 // Adds a word to the vocabulary
-int AddWordToImVocab(char *word) {
+int AddWordToFixVocab(char *word) {
   unsigned int hash, length = strlen(word) + 1;
   if (length > MAX_STRING) length = MAX_STRING;
-  imvocab[imvocab_size].word = (char *)calloc(length, sizeof(char));
-  strcpy(imvocab[imvocab_size].word, word);
-  imvocab[imvocab_size].cn = 0;
-  imvocab_size++;
+
+  // If the word is already in the vocabulary
+  // if (SearchFixVocab(word) != -1) { printf("\"%s\" already in vocabulary\n", word); return fix_vocab_size; }
+  if (SearchFixVocab(word) != -1) return fix_vocab_size; 
+
+  // Add an element into the vocabulary
+  fix_vocab[fix_vocab_size].word = (char *)calloc(length, sizeof(char));
+  strcpy(fix_vocab[fix_vocab_size].word, word);
+  fix_vocab[fix_vocab_size].cn = 0;
+  fix_vocab_size++;
+
   // Reallocate memory if needed
-  if (imvocab_size + 2 >= imvocab_max_size) {
-    imvocab_max_size += 1000;
-    imvocab = (struct vocab_word *)realloc(imvocab, imvocab_max_size * sizeof(struct vocab_word));
+  if (fix_vocab_size + 2 >= fix_vocab_max_size) {
+    fix_vocab_max_size += 1000;
+    fix_vocab = (struct vocab_word *)realloc(fix_vocab, fix_vocab_max_size * sizeof(struct vocab_word));
   }
   hash = GetWordHash(word);
-  while (imvocab_hash[hash] != -1) hash = (hash + 1) % vocab_hash_size;
-  imvocab_hash[hash] = imvocab_size - 1;
-  return imvocab_size - 1;
+  while (fix_vocab_hash[hash] != -1) hash = (hash + 1) % vocab_hash_size;
+  fix_vocab_hash[hash] = fix_vocab_size - 1;
+
+  return fix_vocab_size - 1;
 }
 
 // Read the vocabulary from the image dictionary. These will be fixed if vocab file is specified
-void ReadImVocab() {
+void ReadFixVocab() {
   long long a = 0;
   char word[MAX_STRING];
 
-  FILE *fin = fopen(read_imvocab_file, "rb");
+  FILE *fin = fopen(read_fix_vocab_file, "rb");
   if (fin == NULL) {
-    printf("Image dictionary file %s not found\n", read_imvocab_file);
-    exit(1);
+    printf("WARNING: Image dictionary file %s not found. Not fixing any vocabulary\n", read_fix_vocab_file);
+    read_fix_vocab_file[0] = 0;
+    return;
   }
-  for (a = 0; a < vocab_hash_size; a++) imvocab_hash[a] = -1;
-  imvocab_size = 0;
+  for (a = 0; a < vocab_hash_size; a++) fix_vocab_hash[a] = -1;
+  fix_vocab_size = 0;
   while (1) {
     ReadWord(word, fin);
     if (feof(fin)) break;
     if( !strcmp(word, "</s>") ) continue;
-    a = AddWordToImVocab(word);
-  }
-  if (debug_mode > 0) {
-    printf("Vocab size: %lld\n", imvocab_size);
+    a = AddWordToFixVocab(word);
   }
   fclose(fin);
+  printf("Read in fixed vocabulary. %lld words will be left unchanged during algorithm updates to Vout\n", fix_vocab_size);
 }
 
 void ReadVectors() {
@@ -391,8 +400,8 @@ void ReadVectors() {
   while(1) {
     fgetc(fvin); fgetc(fvout);					// The "\n"  
     if(feof(fvin)) break;
-    if((word = ReadWordIndex(fvin)) < 0) break;			// Read the word in
-    if(ReadWordIndex(fvout) < 0) break;
+    if((word = ReadWordIndex(fvin)) < 0) continue;		// Read the word in. 
+    if(ReadWordIndex(fvout) < 0) continue;
 
     // Don't assume any order, based on the lookup from "ReadWordIndex(filehandle)"
     for (a = 0; a < layer1_size; a++) fread(&syn0[a + word * layer1_size], sizeof(float), 1, fvin);
@@ -401,8 +410,56 @@ void ReadVectors() {
   fclose(fvin);
   fclose(fvout);
 
-  printf("Read in all the words from vector files of prefix %s\n", vector_files);
+  printf("Read in all the words from vector files of \"prefix\" %s\n", vector_files);
+}
 
+void ChangeVout() {
+
+  // Change Vout vectors according to what's specified in filename, and if
+  // we would like to fix them, specify fix_vectors = 1
+  FILE *f;
+  long long words, word, a;
+  float dropvalue;
+  char text[MAX_STRING];
+  int txtfile = strcmp( strrchr(update_vout_file, '.'), ".txt") == 0;
+
+  if (!(f = fopen(update_vout_file, "rb"))) {
+    printf("WARNING: %s is not found. No changes to vectors are made.\n", update_vout_file);
+    return;
+  }
+  fscanf(f, "%lld", &words);
+  fscanf(f, "%lld", &word);
+  if(word!=layer1_size) {
+    printf("WARNING: %s vectors are of size %lld and not %lld. Changes ignored.\n", update_vout_file, word, layer1_size);
+    return;
+  }
+
+  while(1) {
+    if(feof(f)) break;
+    // Read the word in. If not in the vocabulary, then do not update and continue
+    ReadWord(text, f);
+    if(!strcmp(text, "</s>")) continue;
+    if((word = SearchVocab(text)) < 0) {
+      if (feof(f)) continue; 
+      else {
+	printf("Word \"%s\" not in dictionary. Dropped.\n", text); 
+	if (txtfile) for (a = 0; a < layer1_size; a++) fscanf(f, " %f", &dropvalue);
+	else for (a = 0; a < layer1_size; a++) fread(&dropvalue, sizeof(float), 1, f);
+	continue;
+    }}
+    printf("Word \"%s\" updated \n", vocab[word].word);
+    if(txtfile) 
+      for (a = 0; a < layer1_size; a++) fscanf(f, " %f", &syn1neg[a + word*layer1_size]); 
+    else
+      for (a = 0; a < layer1_size; a++) fread(&syn1neg[a + word * layer1_size], sizeof(float), 1, f);
+
+    if (fix_vout_vectors)
+      AddWordToFixVocab(text);
+  }
+
+  if (fix_vout_vectors) printf("Updated vectors from %s, and %lld will remain fixed\n", update_vout_file, fix_vocab_size);
+  else printf("Updated vectors from %s; these will be updated with normal gradients according to %s\n", update_vout_file, output_file);
+  fclose(f);
 }
 
 void ReadVocab() {
@@ -459,8 +516,8 @@ void InitNet() {
     syn0[a * layer1_size + b] = (((next_random & 0xFFFF) / (real)65536) - 0.5) / layer1_size;
   }
   // Initialize vectors (instead of randomly) to read in word vector files
-  if (vector_files[0]) 
-    ReadVectors();
+  if (vector_files[0]) ReadVectors();
+  if (update_vout_file[0]) ChangeVout();
   CreateBinaryTree();
 }
 
@@ -566,17 +623,16 @@ void *TrainModelThread(void *id) {
             label = 0;
           }
 
+          l2 = target * layer1_size;
+          f = 0;
+          for (c = 0; c < layer1_size; c++) f += neu1[c] * syn1neg[c + l2];
+          if (f > MAX_EXP) g = (label - 1) * alpha;
+          else if (f < -MAX_EXP) g = (label - 0) * alpha;
+          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+          for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];
           // Check to see if the target word is in the image dictionary
-          if( !read_imvocab_file[0] || SearchImVocab(vocab[target].word)==-1 ) {
-            l2 = target * layer1_size;
-            f = 0;
-            for (c = 0; c < layer1_size; c++) f += neu1[c] * syn1neg[c + l2];
-            if (f > MAX_EXP) g = (label - 1) * alpha;
-            else if (f < -MAX_EXP) g = (label - 0) * alpha;
-            else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
-            for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];
+          if( !read_fix_vocab_file[0] || SearchFixVocab(vocab[target].word)==-1 ) 
             for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * neu1[c];
-	  } 
 
         }
         // hidden -> in
@@ -626,17 +682,16 @@ void *TrainModelThread(void *id) {
             if (target == word) continue;
             label = 0;
           }
-          // Check to see if the target word is in the image dictionary
-          if( !read_imvocab_file[0] || SearchImVocab(vocab[target].word)==-1 ) {
-            l2 = target * layer1_size;
-            f = 0;
-            for (c = 0; c < layer1_size; c++) f += syn0[c + l1] * syn1neg[c + l2];
-            if (f > MAX_EXP) g = (label - 1) * alpha;
-            else if (f < -MAX_EXP) g = (label - 0) * alpha;
-            else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
-            for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];
+          l2 = target * layer1_size;
+          f = 0;
+          for (c = 0; c < layer1_size; c++) f += syn0[c + l1] * syn1neg[c + l2];
+          if (f > MAX_EXP) g = (label - 1) * alpha;
+          else if (f < -MAX_EXP) g = (label - 0) * alpha;
+          else g = (label - expTable[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]) * alpha;
+          for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];
+	  // Check to see if the target word is in the image dictionary
+          if( !read_fix_vocab_file[0] || SearchFixVocab(vocab[target].word)==-1 )
             for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * syn0[c + l1];
-	  } 
         }
 	// For images, go ahead and update v_in
         // Learn weights input -> hidden
@@ -675,7 +730,7 @@ void TrainModel() {
   pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
   printf("Starting training using file %s\n", train_file);
   starting_alpha = alpha;
-  if (read_imvocab_file[0] != 0) ReadImVocab();
+  if (read_fix_vocab_file[0] != 0) ReadFixVocab();
   if (read_vocab_file[0] != 0) ReadVocab(); else LearnVocabFromTrainFile();
   if (save_vocab_file[0] != 0) SaveVocab();
   if (output_file[0] == 0) return;
@@ -804,7 +859,7 @@ int main(int argc, char **argv) {
     printf("\t\tThe vocabulary will be saved to <file>\n");
     printf("\t-read-vocab <file>\n");
     printf("\t\tThe vocabulary will be read from <file>, not constructed from the training data\n");
-    printf("\t-read-imvocab <file>\n");
+    printf("\t-read-fix-vocab <file>\n");
     printf("\t\tThe dictionary for the image labels to be read from <file>\n");
     printf("\t--read-vecs <file>\n");
     printf("\t\tThe vectors used for v_in and v_out. Files <file>.vin.bin and <file>.vout.bin MUST exist and in binary format\n");
@@ -817,13 +872,18 @@ int main(int argc, char **argv) {
   output_file[0] = 0;
   save_vocab_file[0] = 0;
   read_vocab_file[0] = 0;
-  read_imvocab_file[0] = 0;
+  read_fix_vocab_file[0] = 0;
   vector_files[0] = 0;
+  update_vin_file[0]=0;
+  update_vout_file[0]=0;
   if ((i = ArgPos((char *)"-size", argc, argv)) > 0) layer1_size = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-train", argc, argv)) > 0) strcpy(train_file, argv[i + 1]);
   if ((i = ArgPos((char *)"-save-vocab", argc, argv)) > 0) strcpy(save_vocab_file, argv[i + 1]);
   if ((i = ArgPos((char *)"-read-vocab", argc, argv)) > 0) strcpy(read_vocab_file, argv[i + 1]);
-  if ((i = ArgPos((char *)"-read-imvocab", argc, argv)) > 0) strcpy(read_imvocab_file, argv[i + 1]);
+  if ((i = ArgPos((char *)"-read-fix-vocab", argc, argv)) > 0) strcpy(read_fix_vocab_file, argv[i + 1]);
+  if ((i = ArgPos((char *)"-update-vin-vectors", argc, argv)) > 0) strcpy(update_vin_file, argv[i + 1]);
+  if ((i = ArgPos((char *)"-update-vout-vectors", argc, argv)) > 0) strcpy(update_vout_file, argv[i + 1]);
+  if ((i = ArgPos((char *)"-fix-vout-vectors", argc, argv)) > 0) fix_vout_vectors = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-debug", argc, argv)) > 0) debug_mode = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-binary", argc, argv)) > 0) binary = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-cbow", argc, argv)) > 0) cbow = atoi(argv[i + 1]);
@@ -840,10 +900,13 @@ int main(int argc, char **argv) {
   if ((i = ArgPos((char *)"-classes", argc, argv)) > 0) classes = atoi(argv[i + 1]);
   if ((i = ArgPos((char *)"-read-vecs", argc, argv)) > 0) { printf("Reading from vin and vout files\n"); strcpy(vector_files, argv[i + 1]); }
 
+  printf("Fixed vocabulary file: (%s)\n", read_fix_vocab_file);
+  printf("Output file: %s\n", output_file);
+
   vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
-  imvocab = (struct vocab_word *) calloc(imvocab_max_size, sizeof(struct vocab_word));
+  fix_vocab = (struct vocab_word *) calloc(fix_vocab_max_size, sizeof(struct vocab_word));
   vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
-  imvocab_hash = (int *) calloc(vocab_hash_size, sizeof(int));
+  fix_vocab_hash = (int *) calloc(vocab_hash_size, sizeof(int));
 
   expTable = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
   for (i = 0; i < EXP_TABLE_SIZE; i++) {
