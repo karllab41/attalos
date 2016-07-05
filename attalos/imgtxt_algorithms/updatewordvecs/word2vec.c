@@ -410,7 +410,7 @@ void ReadVectors() {
   fclose(fvin);
   fclose(fvout);
 
-  printf("Read in all the words from vector files of \"prefix\" %s\n", vector_files);
+  printf("Read in all the words from vector files of prefix \"%s\"\n", vector_files);
 }
 
 void ChangeVout() {
@@ -426,6 +426,12 @@ void ChangeVout() {
   if (!(f = fopen(update_vout_file, "rb"))) {
     printf("WARNING: %s is not found. No changes to vectors are made.\n", update_vout_file);
     return;
+  }
+  // If the fixed dictionary didn't exist before, initialize it
+  if (!(read_fix_vocab_file[0])) {
+    read_fix_vocab_file[0]='t'; read_fix_vocab_file[1]=0;
+    for (a = 0; a < vocab_hash_size; a++) fix_vocab_hash[a] = -1;
+    fix_vocab_size = 0;
   }
 
   fscanf(f, "%lld", &words);
@@ -455,13 +461,8 @@ void ChangeVout() {
       for (a = 0; a < layer1_size; a++) fread(&syn1neg[a + word * layer1_size], sizeof(float), 1, f);
 
     // If desired, fix this vector so that it will not be able to change during vector updates
-    if (fix_vout_vectors) {
-      if (!(read_fix_vocab_file[0])) {
-        for (a = 0; a < vocab_hash_size; a++) fix_vocab_hash[a] = -1;
-        fix_vocab_size = 0;
-      }
+    if (fix_vout_vectors)
       AddWordToFixVocab(text);
-    }
   }
 
   if (fix_vout_vectors) printf("Updated vectors from %s, and %lld will remain fixed\n", update_vout_file, fix_vocab_size);
@@ -640,6 +641,7 @@ void *TrainModelThread(void *id) {
           // Check to see if the target word is in the image dictionary
           if( !read_fix_vocab_file[0] || SearchFixVocab(vocab[target].word)==-1 ) 
             for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * neu1[c];
+	  // else printf("Found an image word \"%s\" and not updating\n", vocab[target].word);
 
         }
         // hidden -> in
@@ -699,6 +701,7 @@ void *TrainModelThread(void *id) {
 	  // Check to see if the target word is in the image dictionary
           if( !read_fix_vocab_file[0] || SearchFixVocab(vocab[target].word)==-1 )
             for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * syn0[c + l1];
+	  // else printf("Found an image word \"%s\" and not updating\n", vocab[target].word);
         }
 	// For images, go ahead and update v_in
         // Learn weights input -> hidden
