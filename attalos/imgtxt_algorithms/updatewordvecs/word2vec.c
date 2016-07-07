@@ -1,4 +1,7 @@
 // Modified code of Google's. Modified by Karl Ni
+// Changes:
+//
+// Now reads and writes both input and output vectors
 
 //  Copyright 2013 Google Inc. All Rights Reserved.
 //
