@@ -6,6 +6,7 @@ build: depends
 	docker build -t l41-caffe -f Dockerfile.caffe .
 	docker build -t l41-domino-tensorflow -f Dockerfile.domino .
 	docker build -t l41-torch -f Dockerfile.torch .
+	docker build -t l41-densecap -f Dockerfile.densecap .
 
 
 attalos-bash: depends
@@ -19,6 +20,9 @@ attalos-torch: depends
 attalos-theano: depends
 	docker run --device /dev/nvidiactl:/dev/nvidiactl --device /dev/nvidia-uvm:/dev/nvidia-uvm \
                    --device /dev/nvidia2:/dev/nvidia0  -it l41-keras /bin/bash
+attalos-densecap-bash: depends
+	docker run --device /dev/nvidiactl:/dev/nvidiactl --device /dev/nvidia-uvm:/dev/nvidia-uvm \
+                   --device /dev/nvidia0:/dev/nvidia0  -it l41-densecap /bin/bash
 
 notebook: depends
 	# docker build -t l41-attalos-notebook -f Dockerfile.notebook .
