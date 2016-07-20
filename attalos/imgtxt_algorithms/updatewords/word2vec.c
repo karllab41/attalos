@@ -736,7 +736,10 @@ void TrainModel() {
   strcpy(vin_name, output_file);
   strcpy(vout_name, output_file);
   strcpy(vout_name_txt, output_file);
-  strcat(vin_name, ".vin.bin");
+  if (binary)
+    strcat(vin_name, ".vin.bin");
+  else
+    strcat(vin_name, ".vin.txt");
   strcat(vout_name, ".vout.bin");
   strcat(vout_name_txt, ".vout.txt");
 
