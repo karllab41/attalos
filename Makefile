@@ -20,7 +20,6 @@ attalos-torch: depends
 attalos-theano: depends
 	docker run --device /dev/nvidiactl:/dev/nvidiactl --device /dev/nvidia-uvm:/dev/nvidia-uvm \
                    --device /dev/nvidia2:/dev/nvidia0  -it l41-keras /bin/bash
-
 attalos-densecap-bash: depends
 	docker run --device /dev/nvidiactl:/dev/nvidiactl --device /dev/nvidia-uvm:/dev/nvidia-uvm \
                    --device /dev/nvidia0:/dev/nvidia0  -it l41-densecap /bin/bash
