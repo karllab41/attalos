@@ -25,9 +25,9 @@ class NegSamplingModel(object):
             self.w2v=w2v
             self.model_info['pos_vecs'] = tf.placeholder(dtype=tf.float32)
             self.model_info['neg_vecs'] = tf.placeholder(dtype=tf.float32)
-	    print "Optimization on GPU, word vectors stored separately"
+            print "Optimization on GPU, word vectors stored separately"
         else:
-            self.model_info['w2v'] = tf.Variable(w2v)                                                                               
+            self.model_info['w2v'] = tf.Variable(w2v)
             w2vgraph=self.model_info['w2v'] 
             self.model_info['pos_ids'] = tf.placeholder(dtype=tf.int32)
             self.model_info['neg_ids'] = tf.placeholder(dtype=tf.int32)  
@@ -76,9 +76,9 @@ class NegSamplingModel(object):
         return sess.run(self.model_info['prediction'], feed_dict={self.model_info['input']: x})
 
     def updatewords(self, vpindex, vnindex, vin):
-      for i, (vpi, vni) in enumerate(zip(vpindex, vnindex)):
-          self.w2v[vpi]+=self.learning_rate*np.outer(1 - sigmoid(self.w2v[vpi].dot(vin[i])),vin[i])
-          self.w2v[vni]-=self.learning_rate*np.outer(sigmoid(self.w2v[vni].dot(vin[i])),vin[i])                                                            
+        for i, (vpi, vni) in enumerate(zip(vpindex, vnindex)):
+            self.w2v[vpi]+=self.learning_rate*np.outer(1 - sigmoid(self.w2v[vpi].dot(vin[i])),vin[i])
+            self.w2v[vni]-=self.learning_rate*np.outer(sigmoid(self.w2v[vni].dot(vin[i])),vin[i])                                                            
     def fit(self, sess, x, y, **kwargs):
 
         # If you're not optimizing for the words
@@ -95,9 +95,9 @@ class NegSamplingModel(object):
             pvecs = np.zeros((y.shape[0], y.shape[1], self.w2v.shape[1]))
             nvecs = np.zeros((neg_ids.shape[0], neg_ids.shape[1], self.w2v.shape[1]))
             for i, ids in enumerate(y):
-               pvecs[i] = self.w2v[ids]
+                pvecs[i] = self.w2v[ids]
             for i, ids in enumerate(neg_ids):
-               nvecs[i] = self.w2v[ids]
+                nvecs[i] = self.w2v[ids]
             pvecs = pvecs.transpose((1,0,2))
             nvecs = nvecs.transpose((1,0,2))
             _, loss, preds = sess.run([self.model_info['optimizer'], self.model_info['loss'], self.model_info['prediction']],
