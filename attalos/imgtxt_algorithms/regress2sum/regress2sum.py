@@ -122,7 +122,8 @@ def train_model(train_dataset,
                 model_type=ModelTypes.negsampling,
                 max_pos=5,
                 max_neg=10,
-                optim_words=False):
+                optim_words=False,
+                bugsamp=True):
     """
     Train a regression model to map image features into the word vector space
     Args:
@@ -235,7 +236,10 @@ def train_model(train_dataset,
                     if model_type == ModelTypes.negsampling or model_type == ModelTypes.fast0tag:
                         neg_word_ids.fill(-1)
                         for i in range(neg_word_ids.shape[0]):
-                            neg_word_ids[i] = negsamp(pos_word_ids, max_neg)
+                            if bugsamp:
+                                neg_word_ids[i] = negsamp(pos_word_ids, max_neg)
+                            else:
+                                neg_word_ids[i] = negsamp(pos_word_ids[i], max_neg)                                                        
 
                     batch_time = time.time() - batch_time
                     batch_time_total += batch_time
@@ -381,6 +385,10 @@ def main():
                         action='store_true',
                         default=False,
                         help='Optimize words')
+    parser.add_argument("--bugsamp",                                                                                            
+                        action='store_true',                                                                                        
+                        default=False,                                                                                              
+                        help='Optimize words') 
 
     global args
     args = parser.parse_args()
