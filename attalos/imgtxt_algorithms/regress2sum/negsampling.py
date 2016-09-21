@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
 from scipy.special import expit as sigmoid
+import attalos.util.log.log as l                                                                                                    
+logger = l.getLogger(__name__)                                                                                                      
 
 
 class NegSamplingModel(object):
@@ -25,7 +27,7 @@ class NegSamplingModel(object):
             self.w2v=w2v
             self.model_info['pos_vecs'] = tf.placeholder(dtype=tf.float32)
             self.model_info['neg_vecs'] = tf.placeholder(dtype=tf.float32)
-            print "Optimization, word vectors updated"
+            logger.info('Optimization: JOINTLY OPT word vectors')
         else:
             self.model_info['w2v'] = tf.Variable(w2v)
             w2vgraph=self.model_info['w2v'] 
@@ -37,7 +39,7 @@ class NegSamplingModel(object):
             self.model_info['neg_vecs'] = tf.transpose(tf.nn.embedding_lookup(w2vgraph,
                                                                               self.model_info['neg_ids']),
                                                                               perm=[1,0,2])
-            print "Optimization, fix word vectors."
+            logger.info('Optimization: FIXED word vectors')
 
         # Construct fully connected layers
         layers = []
