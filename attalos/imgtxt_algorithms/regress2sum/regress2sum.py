@@ -121,7 +121,8 @@ def train_model(train_dataset,
                 verbose=True,
                 model_type=ModelTypes.negsampling,
                 max_pos=5,
-                max_neg=10):
+                max_neg=10,
+                optim_words=False):
     """
     Train a regression model to map image features into the word vector space
     Args:
@@ -188,7 +189,7 @@ def train_model(train_dataset,
                                         word_matrix,
                                         learning_rate=learning_rate,
                                         hidden_units=network_size,
-                                        use_batch_norm=True)
+                                        use_batch_norm=True,optim_words=optim_words)
         elif model_type == ModelTypes.fast0tag:
             logger.info('Building model with fast zero tag loss')
             model = FastZeroTagModel(image_feat_size,
@@ -310,7 +311,8 @@ def convert_args_and_call_model():
                 model_output_path=args.model_output_path,
                 model_type=model_type,
                 max_pos=args.max_pos,
-                max_neg=args.max_neg)
+                max_neg=args.max_neg,
+                optim_words=args.optim_words)
 
 
 def main():
@@ -375,6 +377,10 @@ def main():
                         type=int,
                         default=10,
                         help="Max number of negative examples")
+    parser.add_argument("--optim_words",
+                        action='store_true',
+                        default=False,
+                        help='Optimize words')
 
     global args
     args = parser.parse_args()

@@ -11,7 +11,7 @@ class NegSamplingModel(object):
                     w2v,
                     learning_rate=1.001,
                     hidden_units=[200,200],
-                    optim_words=False,
+                    optim_words=True,
                     use_batch_norm=True):
         self.model_info = dict()
 
@@ -25,7 +25,7 @@ class NegSamplingModel(object):
             self.w2v=w2v
             self.model_info['pos_vecs'] = tf.placeholder(dtype=tf.float32)
             self.model_info['neg_vecs'] = tf.placeholder(dtype=tf.float32)
-            print "Optimization on GPU, word vectors stored separately"
+            print "Optimization, word vectors updated"
         else:
             self.model_info['w2v'] = tf.Variable(w2v)
             w2vgraph=self.model_info['w2v'] 
@@ -37,6 +37,7 @@ class NegSamplingModel(object):
             self.model_info['neg_vecs'] = tf.transpose(tf.nn.embedding_lookup(w2vgraph,
                                                                               self.model_info['neg_ids']),
                                                                               perm=[1,0,2])
+            print "Optimization, fix word vectors."
 
         # Construct fully connected layers
         layers = []
