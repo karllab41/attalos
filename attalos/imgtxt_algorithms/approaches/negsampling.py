@@ -75,7 +75,7 @@ class NegSamplingModel(AttalosModel):
             
         # Are we manually decaying the words? Create a TF variable in that case. 
         if weight_decay:
-            logger.info("Learning rate is manually adaptive, dropping every ten (hard coded) epoch")
+            logger.info("Learning rate is manually adaptive, dropping every few (hard coded) epoch")
             model_info['learning_rate'] = tf.placeholder(tf.float32, shape=[])
         else:
             model_info['learning_rate'] = learning_rate
@@ -89,19 +89,28 @@ class NegSamplingModel(AttalosModel):
 
     def __init__(self, wv_model, datasets, **kwargs):
         self.wv_model = wv_model
-        self.one_hot = OneHot(datasets, valid_vocab=wv_model.vocab)
-        word_counts = NegativeSampler.get_wordcount_from_datasets(datasets, self.one_hot)
-        self.negsampler = NegativeSampler(word_counts)
+        
+        # It looks like we're creating one hot vectors for the training AND test set. Unclear
+        # that this could be causing potential performance issues. In any case, you will be
+        # storing more vectors in memory that is necessary.
         train_dataset = datasets[0] # train_dataset should always be first in datasets
+        test_dataset = datasets[-1]  # test_dataset is the last in the datasets
+        self.one_hot = OneHot([train_dataset], valid_vocab=wv_model.vocab)
+        word_counts = NegativeSampler.get_wordcount_from_datasets([train_dataset], self.one_hot)
+        self.negsampler = NegativeSampler(word_counts)
+        
         self.w = construct_W(wv_model, self.one_hot.get_key_ordering()).T
+        
+        # Scale the words
         scale_words = kwargs.get("scale_words",1.0)
         if scale_words == 0.0:
             self.w = (self.w.T / np.linalg.norm(self.w,axis=1)).T
         else:
             self.w *= scale_words
+        self.scale_images = kwargs.get("scale_images",1.0)
 
         # Optimization parameters
-        # Starting learning rate, currently default to 0.001. This will change iteratively if decay is on.
+        # Starting learning rate, currently default to 0.0001. This will change iteratively if decay is on.
         self.learning_rate = kwargs.get("learning_rate", 0.0001)
         self.weight_decay = kwargs.get("weight_decay", 0.0)
         self.optim_words = kwargs.get("optim_words", True)
@@ -128,6 +137,39 @@ class NegSamplingModel(AttalosModel):
         )
         self.test_one_hot = None
         self.test_w = None
+        
+        # Construct matrix for testing
+        self.test_one_hot = OneHot([test_dataset], valid_vocab=self.wv_model.vocab)
+        self.test_w = construct_W(wv_model, self.test_one_hot.get_key_ordering()).T
+
+        # If we're optimizing for words, we need to create the correlation matrix
+        # This correlation matrix is of size (setdiff x setunion). Right now, it's only
+        # (setdiff x trainingset)
+        if self.optim_words:
+            
+            # This can be passed in as an argument
+            self.scale_alpha = kwargs.get("scale_alpha", 0.2)
+            
+            test_words = self.one_hot.get_key_ordering()
+            train_words={}
+            for i,word in enumerate(self.one_hot.get_key_ordering()):
+                train_words[word]=i
+                
+            self.overlap_test = []
+            self.overlap_train = []
+            self.set_diff = []
+            for i,word in enumerate(self.test_one_hot.get_key_ordering()):
+                if train_words.has_key(word):
+                    self.overlap_test += [i] 
+                    self.overlap_train+= [train_words[word]]
+                else:
+                    self.set_diff += [i]
+            # Correlation matrix is test correlated with train
+            # wunion = np.array( list(self.w) + list(wdiff) )
+            # self.Cwd = wunion.dot(wdiff.T)
+            wdiff = self.test_w[self.set_diff]
+            self.Cwd = self.w.dot( wdiff.T )            
+        
         super(NegSamplingModel, self).__init__()
 
     def iter_batches(self, dataset, batch_size):
@@ -136,7 +178,7 @@ class NegSamplingModel(AttalosModel):
             
         # This will decay the learning rate every ten epochs. Hardcoded ten currently...
         if self.weight_decay:
-            if self.epoch_num and self.epoch_num % 15 == 0 and self.learning_rate > 1e-6:
+            if self.epoch_num and self.epoch_num % 150 == 0 and self.learning_rate > 1e-6:
                 self.learning_rate *= self.weight_decay
         	logger.info('Learning rate dropped to {}'.format(self.learning_rate))
             self.epoch_num+=1
@@ -173,6 +215,14 @@ class NegSamplingModel(AttalosModel):
 
     def prep_fit(self, data):
         img_feats, text_feats_list = data
+
+        # NOTE: This will definitely make the iteration a lot slower. The proper thing
+        #       to do would be to normalize at the beginning rather than at each bach.
+        #       Since this is done at every iteration, we incur significant cost.
+        if self.scale_images==0.0:
+            img_feats = (img_feats.T / np.linalg.norm(img_feats,axis=1)).T
+        elif not self.scale_images==1.0:
+            img_feats *= self.scale_images
 
         text_feat_ids = []
         for tags in text_feats_list:
@@ -226,10 +276,22 @@ class NegSamplingModel(AttalosModel):
         return fit_fetches
 
     def prep_predict(self, dataset, cross_eval=False):
+        
         if cross_eval:
-            self.test_one_hot = OneHot([dataset], valid_vocab=self.wv_model.vocab)
+            # self.test_one_hot = OneHot([dataset], valid_vocab=self.wv_model.vocab)
             self.test_w = construct_W(self.wv_model, self.test_one_hot.get_key_ordering()).T
-        else:
+            
+            # Only do this if necessary
+            if len(self.overlap_test):
+                self.test_w[ self.overlap_test ] = self.w[ self.overlap_train ]
+
+            # Only do this if necessary
+            if len(self.set_diff):                
+                # Don't use the union. This needs to be fixed.
+                diffvecs = np.linalg.inv( self.w.T.dot(self.w) ).dot(self.w.T).dot(self.Cwd)
+                self.test_w[ self.set_diff ] = self.scale_alpha*diffvecs.T
+                        
+        if not cross_eval:
             self.test_one_hot = self.one_hot
             self.test_w = self.w
 

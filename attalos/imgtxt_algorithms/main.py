@@ -251,6 +251,10 @@ def main():
                         type=float,
                         default=1.0,
                         help="Scale the word vectors. If set to zero, scale by L2-norm. Otherwise, imvec=scale x imvec. ")
+    parser.add_argument("--scale_alpha",
+                        type=float,
+                        default=0.2,
+                        help="Scale the set difference for tuning purposes. This needs to be changed. ")
 
     args = parser.parse_args()
 

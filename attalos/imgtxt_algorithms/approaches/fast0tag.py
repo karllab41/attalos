@@ -19,12 +19,21 @@ class FastZeroTagModel(AttalosModel):
         self.one_hot = OneHot(datasets, valid_vocab=wv_model.vocab)
         word_counts = NegativeSampler.get_wordcount_from_datasets(datasets, self.one_hot)
         self.negsampler = NegativeSampler(word_counts)
+
+        # Get the word model into memory
         self.w = construct_W(wv_model, self.one_hot.get_key_ordering()).T
+        scale_words = kwargs.get("scale_words", 1.0)
+        if scale_words==0.0:
+            self.w = (self.w.T / np.linalg.norm(self.w,axis=1)).T
+        else:
+            self.w*=scale_words
+
         self.learning_rate = kwargs.get("learning_rate", 0.0001)
         self.optim_words = kwargs.get("optim_words", True)
         self.hidden_units = kwargs.get("hidden_units", "200")
         self.use_batch_norm = kwargs.get("use_batch_norm",False)
         self.opt_type = kwargs.get("opt_type","adam")
+        self.scale_images=kwargs.get("scale_images",1.0)
         if self.hidden_units=='0':                                                                                                  
             self.hidden_units=[]
         else:
@@ -132,6 +141,13 @@ class FastZeroTagModel(AttalosModel):
 
     def prep_fit(self, data):
         img_feats, text_feats_list = data
+
+        # NOTE: TODO: This should be changed to scale the image features at startup. As is, there's
+        #            a lot of computation with this run every iteration, unnecessarily
+        if self.scale_images==0.0:
+            img_feats = (img_feats.T / np.linalg.norm(img_feats,axis=1)).T
+        elif not self.scale_images==1.0:
+            img_feats *= self.scale_images
 
         text_feat_ids = []
         for tags in text_feats_list:
